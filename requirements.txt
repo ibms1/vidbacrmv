@@ -6,3 +6,4 @@ onnxruntime
 Pillow
 imageio
 moviepy
+ffmpeg-python
