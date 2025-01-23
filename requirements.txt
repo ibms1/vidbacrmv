@@ -2,7 +2,7 @@ streamlit
 opencv-python-headless
 numpy
 rembg
+onnxruntime
 Pillow
 imageio
 moviepy
-setuptools
