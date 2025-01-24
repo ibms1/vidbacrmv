@@ -1,4 +1,4 @@
-streamli
+streamlit
 numpy
 opencv-python
 mediapipe
