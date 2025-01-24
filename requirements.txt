@@ -1,8 +1,4 @@
-streamlit
-opencv-python-headless
+streamli
 numpy
-rembg
-pillow
-imageio
-moviepy
-onnxruntime
+opencv-python
+mediapipe

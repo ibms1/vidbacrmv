@@ -1,156 +1,137 @@
 import streamlit as st
 import cv2
 import numpy as np
-from rembg import remove
-from rembg.session_factory import new_session
+import mediapipe as mp
 from PIL import Image
-import os
-import tempfile
-from pathlib import Path
-import imageio
-from moviepy.editor import VideoFileClip
-import time
 
-class GIFBackgroundRemover:
-    def __init__(self):
-        """تهيئة المعالج مع إعدادات محسنة"""
-        self.output_dir = Path(tempfile.gettempdir()) / 'gif_processing'
-        self.output_dir.mkdir(exist_ok=True)
-        self.session = new_session("u2net")  # استخدام u2net بدلاً من onnxruntime
-        
-    def video_to_gif(self, video_path, fps=15):  # زيادة معدل الإطارات للحصول على حركة أكثر سلاسة
-        """تحويل الفيديو إلى GIF مع تحسين الجودة"""
-        clip = VideoFileClip(video_path)
-        # تحسين جودة التحويل
-        gif_path = str(self.output_dir / f'temp_{int(time.time())}.gif')
-        clip.write_gif(
-            gif_path,
-            fps=fps,
-            program='ffmpeg',  # استخدام ffmpeg للحصول على جودة أفضل
-            opt='optimal'  # استخدام الإعدادات المثلى
+# تحسين الواجهة باستخدام CSS مخصص
+st.markdown(
+    """
+    <style>
+    .stButton button {
+        background-color: #4CAF50;
+        color: white;
+        font-size: 16px;
+        padding: 10px 24px;
+        border-radius: 8px;
+        border: none;
+    }
+    .stButton button:hover {
+        background-color: #45a049;
+    }
+    .stFileUploader {
+        margin-bottom: 20px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# عنوان التطبيق
+st.title("🎥 Remove Background from Video and Replace It")
+
+# تحميل الفيديو
+uploaded_video = st.file_uploader("Upload a video", type=["mp4", "avi", "mov"])
+
+if uploaded_video is not None:
+    # قراءة الفيديو
+    video_bytes = uploaded_video.read()
+    with open("temp_video.mp4", "wb") as f:
+        f.write(video_bytes)
+
+    # خيارات للمستخدم
+    col1, col2 = st.columns(2)
+    with col1:
+        option = st.radio("Choose an option:", ["Remove Background Only", "Replace Background with Image"])
+    with col2:
+        start_processing = st.button("Start Processing")
+
+    # تحميل صورة الخلفية (فقط إذا تم اختيار استبدال الخلفية)
+    if option == "Replace Background with Image":
+        background_image = st.file_uploader("Upload a background image", type=["jpg", "png", "jpeg"])
+    else:
+        background_image = None
+
+    if start_processing:
+        # تهيئة نموذج إزالة الخلفية
+        mp_selfie_segmentation = mp.solutions.selfie_segmentation
+        segmentation = mp_selfie_segmentation.SelfieSegmentation(model_selection=1)
+
+        # قراءة الفيديو
+        cap = cv2.VideoCapture("temp_video.mp4")
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fps = int(cap.get(cv2.CAP_PROP_FPS))
+
+        # مكان لعرض الفيديو
+        video_placeholder = st.empty()
+
+        # تحميل صورة الخلفية (إذا تم اختيار استبدال الخلفية)
+        if option == "Replace Background with Image" and background_image is not None:
+            background_bytes = background_image.read()
+            background = cv2.imdecode(np.frombuffer(background_bytes, np.uint8), cv2.IMREAD_COLOR)
+            background = cv2.cvtColor(background, cv2.COLOR_BGR2RGB)  # تحويل إلى RGB
+            background = cv2.resize(background, (width, height))  # تغيير حجم الخلفية لتناسب الفيديو
+        else:
+            background = None
+
+        # إعداد الفيديو المُنتَج
+        output_video_path = "output_video.mp4"
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        out = cv2.VideoWriter(output_video_path, fourcc, fps, (width, height))
+
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                st.success("Processing completed!")
+                break
+
+            # تحويل الإطار إلى RGB
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+            # تطبيق نموذج إزالة الخلفية
+            results = segmentation.process(frame_rgb)
+            mask = results.segmentation_mask
+
+            # تحسين القناع باستخدام Gaussian Blur
+            mask = cv2.GaussianBlur(mask, (15, 15), 0)
+
+            # إنشاء القناع
+            condition = np.stack((mask,) * 3, axis=-1) > 0.6
+
+            # إذا تم اختيار "Remove Background Only"
+            if option == "Remove Background Only":
+                output = np.where(condition, frame_rgb, 0)  # إزالة الخلفية (تعيينها إلى اللون الأسود)
+            else:
+                # إذا تم اختيار "Replace Background with Image"
+                if background is not None:
+                    # استبدال الخلفية
+                    output = np.where(condition, frame_rgb, background)
+                else:
+                    st.warning("Please upload a background image to replace it.")
+                    break
+
+            # عرض الإطار المعالج
+            video_placeholder.image(output, channels="RGB", use_column_width=True)
+
+            # حفظ الإطار المعالج في الفيديو المُنتَج
+            out.write(cv2.cvtColor(output, cv2.COLOR_RGB2BGR))
+
+        # إطلاق الفيديو وإغلاق النوافذ
+        cap.release()
+        out.release()
+
+        # زر لتحميل الفيديو المُنتَج
+        with open(output_video_path, "rb") as f:
+            video_data = f.read()
+        st.download_button(
+            label="Download Processed Video",
+            data=video_data,
+            file_name="output_video.mp4",
+            mime="video/mp4",
         )
-        clip.close()
-        return gif_path
-        
-    def process_gif(self, gif_path, progress_bar, status_text):
-        """معالجة الـ GIF مع تحسين الشفافية والجودة"""
-        gif = Image.open(gif_path)
-        frames = []
-        n_frames = gif.n_frames
-        
-        for i in range(n_frames):
-            gif.seek(i)
-            # تحويل الإطار إلى RGBA للحفاظ على الشفافية
-            frame = gif.convert('RGBA')
-            
-            # تحسين إزالة الخلفية مع إعدادات إضافية
-            frame_no_bg = remove(
-                frame,
-                session=self.session  # استخدام الجلسة المخصصة (u2net)
-            )
-            
-            # تحويل الخلفية السوداء إلى شفافة
-            frame_data = np.array(frame_no_bg)
-            r, g, b, a = frame_data.T
-            black_areas = (r == 0) & (g == 0) & (b == 0)
-            frame_data[..., 3][black_areas.T] = 0
-            
-            # تحويل مصفوفة NumPy إلى صورة PIL
-            frame_processed = Image.fromarray(frame_data)
-            frames.append(frame_processed)
-            
-            progress = (i + 1) / n_frames
-            progress_bar.progress(progress)
-            status_text.text(f"Processing frame: {i+1}/{n_frames}")
-        
-        # حفظ النتيجة مع إعدادات محسنة للجودة
-        output_path = str(self.output_dir / f'output_{int(time.time())}.gif')
-        frames[0].save(
-            output_path,
-            save_all=True,
-            append_images=frames[1:],
-            duration=1000//15,  # تحسين توقيت الإطارات
-            loop=0,
-            optimize=False,  # تعطيل التحسين للحفاظ على الجودة
-            quality=95,  # جودة عالية
-            disposal=2  # تحسين معالجة الإطارات المتتالية
-        )
-        
-        return output_path
-
-def validate_video(file):
-    """التحقق من صحة الفيديو"""
-    if file is None:
-        return False, "No file uploaded"
-        
-    file_size = len(file.getvalue()) / (1024 * 1024)
-    if file_size > 50:  # تقليل الحد الأقصى إلى 50MB
-        return False, f"File too large: {file_size:.1f}MB (max 50MB)"
-        
-    return True, "File is valid"
-
-def main():
-    st.set_page_config(page_title="Video to GIF Background Remover", layout="wide")
-    
-    st.title("🎥 Video to GIF Background Remover")
-    st.write("Upload a video to convert it to GIF and remove its background. Limited to 50MB.")
-    
-    # إضافة خيارات متقدمة
-    with st.expander("Advanced Settings"):
-        fps = st.slider("FPS (Frames Per Second)", min_value=10, max_value=30, value=15)
-        quality = st.slider("Output Quality", min_value=70, max_value=100, value=95)
-    
-    uploaded_file = st.file_uploader("Choose a video file", type=['mp4', 'avi', 'mov'])
-    
-    if uploaded_file:
-        is_valid, message = validate_video(uploaded_file)
-        
-        if not is_valid:
-            st.error(message)
-            return
-            
-        temp_input = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
-        temp_input.write(uploaded_file.read())
-        temp_input.close()
-        
-        try:
-            if st.button("Remove Background"):
-                progress_bar = st.progress(0)
-                status_text = st.empty()
-                
-                processor = GIFBackgroundRemover()
-                
-                status_text.text("Converting to GIF...")
-                gif_path = processor.video_to_gif(temp_input.name, fps=fps)
-                
-                output_path = processor.process_gif(gif_path, progress_bar, status_text)
-                
-                st.success("Processing complete!")
-                st.image(output_path)
-                
-                with open(output_path, "rb") as file:
-                    st.download_button(
-                        label="Download GIF",
-                        data=file,
-                        file_name="video_no_background.gif",
-                        mime="image/gif"
-                    )
-                
-        finally:
-            os.unlink(temp_input.name)
-            
-    st.markdown("---")
-    st.markdown("""
-        ### Tips for best results:
-        1. Use videos with clear subjects and contrasting backgrounds
-        2. Keep the video short (5-10 seconds recommended)
-        3. Ensure good lighting in the video
-        4. Avoid very fast movements
-        5. Use higher FPS for smoother animation
-    """)
-
-if __name__ == "__main__":
-    main()
+else:
+    st.warning("Please upload a video to start processing.")
 
 
 
