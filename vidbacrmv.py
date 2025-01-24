@@ -2,6 +2,7 @@ import streamlit as st
 import cv2
 import numpy as np
 from rembg import remove
+from rembg.session_factory import new_session
 from PIL import Image
 import os
 import tempfile
@@ -15,6 +16,7 @@ class GIFBackgroundRemover:
         """تهيئة المعالج مع إعدادات محسنة"""
         self.output_dir = Path(tempfile.gettempdir()) / 'gif_processing'
         self.output_dir.mkdir(exist_ok=True)
+        self.session = new_session("u2net")  # استخدام u2net بدلاً من onnxruntime
         
     def video_to_gif(self, video_path, fps=15):  # زيادة معدل الإطارات للحصول على حركة أكثر سلاسة
         """تحويل الفيديو إلى GIF مع تحسين الجودة"""
@@ -44,10 +46,7 @@ class GIFBackgroundRemover:
             # تحسين إزالة الخلفية مع إعدادات إضافية
             frame_no_bg = remove(
                 frame,
-                alpha_matting=True,  # تمكين alpha matting للحصول على حواف أفضل
-                alpha_matting_foreground_threshold=240,
-                alpha_matting_background_threshold=10,
-                alpha_matting_erode_size=5
+                session=self.session  # استخدام الجلسة المخصصة (u2net)
             )
             
             # تحويل الخلفية السوداء إلى شفافة
@@ -85,8 +84,8 @@ def validate_video(file):
         return False, "No file uploaded"
         
     file_size = len(file.getvalue()) / (1024 * 1024)
-    if file_size > 100:
-        return False, f"File too large: {file_size:.1f}MB (max 100MB)"
+    if file_size > 50:  # تقليل الحد الأقصى إلى 50MB
+        return False, f"File too large: {file_size:.1f}MB (max 50MB)"
         
     return True, "File is valid"
 
@@ -94,7 +93,7 @@ def main():
     st.set_page_config(page_title="Video to GIF Background Remover", layout="wide")
     
     st.title("🎥 Video to GIF Background Remover")
-    st.write("Upload a video to convert it to GIF and remove its background. Limited to 100MB.")
+    st.write("Upload a video to convert it to GIF and remove its background. Limited to 50MB.")
     
     # إضافة خيارات متقدمة
     with st.expander("Advanced Settings"):
@@ -152,3 +151,27 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+    
+# إخفاء العناصر غير المرغوب فيها
+hide_streamlit_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            .stDeployButton {display:none;}
+            #stStreamlitLogo {display: none;}
+            a {
+                text-decoration: none;
+                color: inherit;
+                pointer-events: none;
+            }
+            a:hover {
+                text-decoration: none;
+                color: inherit;
+                cursor: default;
+            }
+            </style>
+            """
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
