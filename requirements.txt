@@ -1,9 +1,7 @@
 streamlit
-opencv-python-headless
+opencv-python
 numpy
 rembg
-onnxruntime
-Pillow
+pillow
 imageio
 moviepy
-ffmpeg-python
