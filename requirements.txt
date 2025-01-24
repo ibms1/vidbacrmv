@@ -5,3 +5,4 @@ rembg
 pillow
 imageio
 moviepy
+onnxruntime
