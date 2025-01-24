@@ -112,7 +112,7 @@ if uploaded_video is not None:
                     break
 
             # عرض الإطار المعالج
-            video_placeholder.image(output, channels="RGB", use_column_width=True)
+            video_placeholder.image(output, channels="RGB", use_container_width=True)  # تم التحديث هنا
 
             # حفظ الإطار المعالج في الفيديو المُنتَج
             out.write(cv2.cvtColor(output, cv2.COLOR_RGB2BGR))
@@ -132,27 +132,3 @@ if uploaded_video is not None:
         )
 else:
     st.warning("Please upload a video to start processing.")
-
-
-
-    
-# إخفاء العناصر غير المرغوب فيها
-hide_streamlit_style = """
-            <style>
-            #MainMenu {visibility: hidden;}
-            footer {visibility: hidden;}
-            .stDeployButton {display:none;}
-            #stStreamlitLogo {display: none;}
-            a {
-                text-decoration: none;
-                color: inherit;
-                pointer-events: none;
-            }
-            a:hover {
-                text-decoration: none;
-                color: inherit;
-                cursor: default;
-            }
-            </style>
-            """
-st.markdown(hide_streamlit_style, unsafe_allow_html=True)
