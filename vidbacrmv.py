@@ -2,7 +2,6 @@ import streamlit as st
 import cv2
 import numpy as np
 import mediapipe as mp
-from moviepy.editor import VideoFileClip, AudioFileClip
 import os
 from PIL import Image
 
@@ -134,13 +133,11 @@ if uploaded_video is not None:
         out.release()
 
         # دمج الصوت مع الفيديو المُنتَج
-        video_clip = VideoFileClip("temp_video.mp4")
-        audio_clip = video_clip.audio
-        final_clip = VideoFileClip(output_video_path).set_audio(audio_clip)
-        final_clip.write_videofile("final_output.mp4", codec="libx264")
+        final_output = "final_output.mp4"
+        os.system(f"ffmpeg -i output_video.mp4 -i temp_video.mp4 -c:v copy -map 0:v:0 -map 1:a:0 -shortest {final_output}")
 
         # زر لتحميل الفيديو المُنتَج
-        with open("final_output.mp4", "rb") as f:
+        with open(final_output, "rb") as f:
             video_data = f.read()
         st.download_button(
             label="Download Processed Video",
@@ -151,7 +148,7 @@ if uploaded_video is not None:
 
         # تنظيف الملفات المؤقتة
         os.remove("temp_video.mp4")
-        os.remove(output_video_path)
+        os.remove("output_video.mp4")
         os.remove("final_output.mp4")
 else:
     st.warning("Please upload a video to start processing.")
