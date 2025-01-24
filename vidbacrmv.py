@@ -2,6 +2,8 @@ import streamlit as st
 import cv2
 import numpy as np
 import mediapipe as mp
+from moviepy.editor import VideoFileClip, AudioFileClip
+import os
 from PIL import Image
 
 # تحسين الواجهة باستخدام CSS مخصص
@@ -34,10 +36,9 @@ st.title("🎥 Remove Background from Video and Replace It")
 uploaded_video = st.file_uploader("Upload a video", type=["mp4", "avi", "mov"])
 
 if uploaded_video is not None:
-    # قراءة الفيديو
-    video_bytes = uploaded_video.read()
+    # حفظ الفيديو المؤقت
     with open("temp_video.mp4", "wb") as f:
-        f.write(video_bytes)
+        f.write(uploaded_video.read())
 
     # خيارات للمستخدم
     col1, col2 = st.columns(2)
@@ -62,6 +63,7 @@ if uploaded_video is not None:
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps = int(cap.get(cv2.CAP_PROP_FPS))
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
         # مكان لعرض الفيديو
         video_placeholder = st.empty()
@@ -80,10 +82,14 @@ if uploaded_video is not None:
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
         out = cv2.VideoWriter(output_video_path, fourcc, fps, (width, height))
 
+        # شريط التقدم
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+
+        frame_count = 0
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
-                st.success("Processing completed!")
                 break
 
             # تحويل الإطار إلى RGB
@@ -112,23 +118,63 @@ if uploaded_video is not None:
                     break
 
             # عرض الإطار المعالج
-            video_placeholder.image(output, channels="RGB", use_container_width=True)  # تم التحديث هنا
+            video_placeholder.image(output, channels="RGB", use_container_width=True)
 
             # حفظ الإطار المعالج في الفيديو المُنتَج
             out.write(cv2.cvtColor(output, cv2.COLOR_RGB2BGR))
+
+            # تحديث شريط التقدم
+            frame_count += 1
+            progress = int((frame_count / total_frames) * 100)
+            progress_bar.progress(progress)
+            status_text.text(f"Processing: {progress}%")
 
         # إطلاق الفيديو وإغلاق النوافذ
         cap.release()
         out.release()
 
+        # دمج الصوت مع الفيديو المُنتَج
+        video_clip = VideoFileClip("temp_video.mp4")
+        audio_clip = video_clip.audio
+        final_clip = VideoFileClip(output_video_path).set_audio(audio_clip)
+        final_clip.write_videofile("final_output.mp4", codec="libx264")
+
         # زر لتحميل الفيديو المُنتَج
-        with open(output_video_path, "rb") as f:
+        with open("final_output.mp4", "rb") as f:
             video_data = f.read()
         st.download_button(
             label="Download Processed Video",
             data=video_data,
-            file_name="output_video.mp4",
+            file_name="final_output.mp4",
             mime="video/mp4",
         )
+
+        # تنظيف الملفات المؤقتة
+        os.remove("temp_video.mp4")
+        os.remove(output_video_path)
+        os.remove("final_output.mp4")
 else:
     st.warning("Please upload a video to start processing.")
+
+
+    
+# إخفاء العناصر غير المرغوب فيها
+hide_streamlit_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            .stDeployButton {display:none;}
+            #stStreamlitLogo {display: none;}
+            a {
+                text-decoration: none;
+                color: inherit;
+                pointer-events: none;
+            }
+            a:hover {
+                text-decoration: none;
+                color: inherit;
+                cursor: default;
+            }
+            </style>
+            """
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
