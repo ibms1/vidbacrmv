@@ -1,8 +1,8 @@
-streamlit==1.26.0
-opencv-python-headless==4.8.0
-numpy==1.23.5
+streamlit==1.32.0
+opencv-python-headless==4.9.0.80
+numpy==1.26.0
 rembg==2.0.50
-pillow==10.0.0
-imageio==2.31.1
+pillow==10.1.0
+imageio==2.33.0
 moviepy==1.0.3
-onnxruntime==1.15.1
+onnxruntime==1.16.0
